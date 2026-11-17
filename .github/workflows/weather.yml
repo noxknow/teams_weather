@@ -18,7 +18,7 @@ jobs:
       - name: 날씨 전송
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          WEATHER_LAT: "37.5665"
-          WEATHER_LON: "126.9780"
+          WEATHER_LAT: "37.544581"
+          WEATHER_LON: "127.055961"
           WEATHER_LOCATION: "서울"
         run: python weather_to_teams.py
