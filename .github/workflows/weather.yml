@@ -4,7 +4,8 @@ name: Teams 아침 날씨 알림
 on:
   schedule:
     # GitHub Actions cron은 UTC 기준. 22:30 UTC = 한국 시간 07:30
-    - cron: "30 22 * * *"
+    # UTC 일~목(0-4) = 한국 월~금
+    - cron: "30 22 * * 0-4"
   workflow_dispatch: # 수동 실행(테스트용)
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
       - name: 날씨 전송
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          WEATHER_LAT: "37.544581"
-          WEATHER_LON: "127.055961"
-          WEATHER_LOCATION: "서울"
+          WEATHER_LAT: "37.545040"
+          WEATHER_LON: "127.055124"
+          WEATHER_LOCATION: "성수"
         run: python weather_to_teams.py
