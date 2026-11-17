@@ -71,6 +71,7 @@ def fetch_weather(lat: float, lon: float) -> dict:
             "longitude": lon,
             "current": "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
+            "hourly": "weather_code,precipitation_probability,precipitation",
             "timezone": "Asia/Seoul",
             "wind_speed_unit": "ms",
             "forecast_days": 1,
@@ -102,6 +103,53 @@ def advice(daily_code: int, rain_prob: int, t_min: float, t_max: float) -> list:
     if t_max - t_min >= 10:
         tips.append(_wrap("🧥", "일교차가 커서 겉옷이 필요해요"))
     return tips or [_wrap("😊", "특별히 챙길 건 없어요")]
+
+
+HOURLY_HOURS = range(8, 21, 2)  # 08, 10, 12, 14, 16, 18, 20시
+
+
+def hourly_block(hourly: dict) -> dict:
+    """08~20시 2시간 간격 강수확률·강수량을 가로 표로 만든다."""
+    by_hour = {
+        int(t[11:13]): i for i, t in enumerate(hourly["time"])
+    }
+    columns = []
+    for h in HOURLY_HOURS:
+        i = by_hour.get(h)
+        if i is None:
+            continue
+        emoji, _ = WMO.get(hourly["weather_code"][i], ("🌡️", ""))
+        prob = hourly["precipitation_probability"][i] or 0
+        mm = hourly["precipitation"][i] or 0
+        columns.append(
+            {
+                "type": "Column",
+                "width": "stretch",
+                "items": [
+                    {"type": "TextBlock", "text": f"{h}시", "horizontalAlignment": "Center",
+                     "size": "Small", "isSubtle": True},
+                    {"type": "TextBlock", "text": emoji, "horizontalAlignment": "Center",
+                     "spacing": "None"},
+                    {"type": "TextBlock", "text": f"{prob}%", "horizontalAlignment": "Center",
+                     "size": "Small", "spacing": "None",
+                     "weight": "Bolder" if prob >= 50 else "Default",
+                     "color": "Accent" if prob >= 50 else "Default"},
+                    {"type": "TextBlock", "text": f"{mm:.1f}mm" if mm > 0 else "-",
+                     "horizontalAlignment": "Center", "size": "Small", "spacing": "None",
+                     "isSubtle": mm == 0},
+                ],
+            }
+        )
+    return {
+        "type": "Container",
+        "separator": True,
+        "spacing": "Medium",
+        "items": [
+            {"type": "TextBlock", "text": "🕗 시간대별 강수 (확률 · 강수량)",
+             "weight": "Bolder", "size": "Small"},
+            {"type": "ColumnSet", "spacing": "Small", "columns": columns},
+        ],
+    }
 
 
 def build_card(weather: dict, location: str, now: datetime) -> dict:
@@ -156,6 +204,7 @@ def build_card(weather: dict, location: str, now: datetime) -> dict:
                     {"title": "🍃 바람", "value": f"{cur['wind_speed_10m']:.1f} m/s"},
                 ],
             },
+            hourly_block(weather["hourly"]),
             *tip_blocks,
         ],
     }
