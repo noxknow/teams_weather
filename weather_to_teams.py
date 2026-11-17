@@ -157,14 +157,6 @@ def build_card(weather: dict, location: str, now: datetime) -> dict:
                 ],
             },
             *tip_blocks,
-            {
-                "type": "TextBlock",
-                "text": "오늘도 좋은 하루 보내세요 🙌",
-                "isSubtle": True,
-                "size": "Small",
-                "spacing": "Medium",
-                "wrap": True,
-            },
         ],
     }
     # Teams Workflows 웹훅이 받는 형식
