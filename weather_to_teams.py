@@ -4,14 +4,17 @@
 - 날씨: Open-Meteo (API 키 불필요)
 - 전송: Teams Workflows(Power Automate) 웹훅으로 Adaptive Card 전송
 - 의존성: 표준 라이브러리만 사용 (Python 3.9+)
+- 토요일·일요일(KST)에는 보내지 않는다.
 
 환경 변수
   TEAMS_WEBHOOK_URL  (필수) Teams Workflows 웹훅 URL
-  WEATHER_LAT        (선택) 위도, 기본 37.5665 (서울)
-  WEATHER_LON        (선택) 경도, 기본 126.9780
-  WEATHER_LOCATION   (선택) 카드에 표시할 지역명, 기본 "서울"
+  WEATHER_LAT        (선택) 위도, 기본 37.545040 (성수)
+  WEATHER_LON        (선택) 경도, 기본 127.055124 (성수)
+  WEATHER_LOCATION   (선택) 카드에 표시할 지역명, 기본 "성수"
 
---dry-run 옵션을 주면 Teams로 보내지 않고 카드 JSON만 출력한다.
+옵션
+  --dry-run  Teams로 보내지 않고 카드 JSON만 출력한다. (요일 상관없이 동작)
+  --force    주말이어도 전송한다. (테스트용)
 """
 import json
 import os
@@ -23,6 +26,10 @@ from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
 WEEKDAYS = "월화수목금토일"
+
+DEFAULT_LAT = "37.545040"
+DEFAULT_LON = "127.055124"
+DEFAULT_LOCATION = "성수"
 
 # WMO weather code -> (이모지, 설명)
 WMO = {
@@ -74,22 +81,27 @@ def fetch_weather(lat: float, lon: float) -> dict:
         return json.load(resp)
 
 
-def advice(daily_code: int, rain_prob: int, t_min: float, t_max: float) -> str:
+def _wrap(emoji: str, text: str) -> str:
+    return f"{emoji} {text} {emoji}"
+
+
+def advice(daily_code: int, rain_prob: int, t_min: float, t_max: float) -> list:
+    """오늘 챙길 것. 한 줄에 하나씩, 양옆에 이모지를 붙인다."""
     tips = []
     snowy = daily_code in (71, 73, 75, 77, 85, 86)
     if snowy:
-        tips.append("눈 예보가 있어요. 출근길 미끄럼 조심하세요.")
+        tips.append(_wrap("❄️", "눈 예보가 있어요. 출근길 미끄럼 조심하세요"))
     elif rain_prob >= 60:
-        tips.append("우산 챙기세요.")
+        tips.append(_wrap("☂️", "우산 챙기세요"))
     elif rain_prob >= 30:
-        tips.append("비 올 수 있으니 작은 우산 하나 챙기면 좋아요.")
+        tips.append(_wrap("🌂", "비 올 수 있으니 작은 우산 하나 챙기면 좋아요"))
     if t_min <= 0:
-        tips.append("아침 기온이 영하예요. 따뜻하게 입으세요.")
+        tips.append(_wrap("🧣", "아침 기온이 영하예요. 따뜻하게 입으세요"))
     elif t_max >= 30:
-        tips.append("낮에 많이 더워요. 물 자주 드세요.")
+        tips.append(_wrap("🥤", "낮에 많이 더워요. 물 자주 드세요"))
     if t_max - t_min >= 10:
-        tips.append("일교차가 커서 겉옷이 필요해요.")
-    return " ".join(tips) or "특별히 챙길 건 없어요."
+        tips.append(_wrap("🧥", "일교차가 커서 겉옷이 필요해요"))
+    return tips or [_wrap("😊", "특별히 챙길 건 없어요")]
 
 
 def build_card(weather: dict, location: str, now: datetime) -> dict:
@@ -103,6 +115,15 @@ def build_card(weather: dict, location: str, now: datetime) -> dict:
     cur_emoji, cur_desc = WMO.get(cur["weather_code"], ("🌡️", "정보 없음"))
     day_emoji, day_desc = WMO.get(daily_code, ("🌡️", "정보 없음"))
     date_str = f"{now.month}월 {now.day}일 ({WEEKDAYS[now.weekday()]})"
+
+    rain_text = f"{rain_prob}%" + (f" (예상 {rain_sum:.1f}mm)" if rain_sum > 0 else "")
+
+    tip_blocks = [
+        {"type": "TextBlock", "text": tip, "wrap": True, "spacing": "Small", "weight": "Bolder"}
+        for tip in advice(daily_code, rain_prob, t_min, t_max)
+    ]
+    tip_blocks[0]["separator"] = True
+    tip_blocks[0]["spacing"] = "Medium"
 
     card = {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -128,19 +149,21 @@ def build_card(weather: dict, location: str, now: datetime) -> dict:
             {
                 "type": "FactSet",
                 "facts": [
-                    {"title": "오늘 날씨", "value": day_desc},
-                    {"title": "최저 / 최고", "value": f"{t_min:.0f}°C / {t_max:.0f}°C"},
-                    {"title": "강수확률", "value": f"{rain_prob}%"
-                     + (f" (예상 {rain_sum:.1f}mm)" if rain_sum > 0 else "")},
-                    {"title": "습도", "value": f"{cur['relative_humidity_2m']}%"},
-                    {"title": "바람", "value": f"{cur['wind_speed_10m']:.1f} m/s"},
+                    {"title": "🗓️ 오늘 날씨", "value": f"{day_emoji} {day_desc}"},
+                    {"title": "🌡️ 최저 / 최고", "value": f"{t_min:.0f}°C / {t_max:.0f}°C"},
+                    {"title": "☔ 강수확률", "value": rain_text},
+                    {"title": "💧 습도", "value": f"{cur['relative_humidity_2m']}%"},
+                    {"title": "🍃 바람", "value": f"{cur['wind_speed_10m']:.1f} m/s"},
                 ],
             },
+            *tip_blocks,
             {
                 "type": "TextBlock",
-                "text": advice(daily_code, rain_prob, t_min, t_max),
-                "wrap": True,
+                "text": "오늘도 좋은 하루 보내세요 🙌",
+                "isSubtle": True,
+                "size": "Small",
                 "spacing": "Medium",
+                "wrap": True,
             },
         ],
     }
@@ -171,11 +194,19 @@ def send_to_teams(webhook_url: str, payload: dict) -> None:
 
 def main() -> int:
     dry_run = "--dry-run" in sys.argv
-    lat = float(os.environ.get("WEATHER_LAT", "37.5665"))
-    lon = float(os.environ.get("WEATHER_LON", "126.9780"))
-    location = os.environ.get("WEATHER_LOCATION", "서울")
+    force = "--force" in sys.argv
+    now = datetime.now(KST)
 
-    payload = build_card(fetch_weather(lat, lon), location, datetime.now(KST))
+    # 토(5)·일(6)은 건너뜀
+    if now.weekday() >= 5 and not (dry_run or force):
+        print(f"{WEEKDAYS[now.weekday()]}요일이라 전송하지 않습니다.")
+        return 0
+
+    lat = float(os.environ.get("WEATHER_LAT", DEFAULT_LAT))
+    lon = float(os.environ.get("WEATHER_LON", DEFAULT_LON))
+    location = os.environ.get("WEATHER_LOCATION", DEFAULT_LOCATION)
+
+    payload = build_card(fetch_weather(lat, lon), location, now)
 
     if dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
