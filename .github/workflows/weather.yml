@@ -3,10 +3,10 @@ name: Teams 아침 날씨 알림
 
 on:
   schedule:
-    # GitHub Actions cron은 UTC 기준. 22:30 UTC = 한국 시간 07:30
-    # UTC 일~목(0-4) = 한국 월~금
-    - cron: "30 22 * * 0-4"
-  workflow_dispatch: # 수동 실행(테스트용)
+    # 22:17 UTC = 한국 시간 07:17, UTC 일~목 = 한국 월~금
+    - cron: "17 22 * * 0-4"
+    # 테스트용: 오늘(11/18) 10:05 KST 한 번. 확인 후 이 줄 삭제
+    - cron: "5 1 18 11 *"
 
 jobs:
   notify:
