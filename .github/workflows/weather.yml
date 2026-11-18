@@ -3,8 +3,7 @@ name: Teams 아침 날씨 알림
 
 on:
   schedule:
-    # 테스트용: 오늘(11/18) 16:37 KST 한 번. 확인 후 이 줄 삭제
-    - cron: "37 7 18 11 *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
