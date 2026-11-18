@@ -3,7 +3,7 @@ name: Teams 아침 날씨 알림
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
